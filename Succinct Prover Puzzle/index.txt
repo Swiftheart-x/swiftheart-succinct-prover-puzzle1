@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Succinct Prover Puzzle</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      background: #fff5fa;
+      text-align: center;
+      color: #e6007a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      margin: 20px;
+      color: #e6007a;
+    }
+
+    #controls {
+      margin-bottom: 15px;
+    }
+
+    select, button {
+      padding: 10px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #e6007a;
+      color: white;
+      transition: all 0.3s ease;
+    }
+
+    button:hover, select:hover {
+      opacity: 0.9;
+    }
+
+    #startBtn.pulse {
+      animation: pulse 1.2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(230, 0, 122, 0.6); }
+      70% { box-shadow: 0 0 0 12px rgba(230, 0, 122, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(230, 0, 122, 0); }
+    }
+
+    #game-wrapper {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    #puzzle-container {
+      border: 6px solid #ffb6d4;
+      padding: 5px;
+      background: #fff0f5;
+      border-radius: 12px;
+    }
+
+    #puzzle {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-gap: 2px;
+      width: 400px;
+      height: 400px;
+    }
+
+    .tile {
+      background-image: url('succinct-logo.png');
+      background-size: 400px 400px;
+      background-repeat: no-repeat;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      cursor: pointer;
+    }
+
+    .tile:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 10px #ff99cc;
+    }
+
+    .empty {
+      background: #f9b5d1 !important;
+      cursor: default;
+    }
+
+    #preview-container {
+      border: 4px dashed #f9b5d1;
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff0f5;
+      width: 120px;
+    }
+
+    #preview-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-gap: 1px;
+      width: 120px;
+      height: 120px;
+    }
+
+    .preview-tile {
+      background-image: url('succinct-logo.png');
+      background-size: 120px 120px;
+      background-repeat: no-repeat;
+      width: 100%;
+      height: 100%;
+    }
+
+    #info {
+      margin-top: 10px;
+      font-size: 1em;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Succinct Prover Puzzle</h1>
+
+<div id="controls">
+  <select id="difficulty">
+    <option value="easy">Let's Pruv It (Easy)</option>
+    <option value="normal">Proof Verified (Normal)</option>
+    <option value="hard">Pruv Ur Luv (Difficult)</option>
+  </select>
+  <button id="startBtn" class="pulse" onclick="toggleGame()">Start Game</button>
+  <button onclick="resetGame()">Reset</button>
+  <button onclick="toggleMusic()">Music</button>
+</div>
+
+<div id="info">
+  Moves: <span id="moves">0</span> |
+  Time: <span id="timer">0</span>s |
+  Best: <span id="highscore">--</span>
+</div>
+
+<div id="game-wrapper">
+  <div id="puzzle-container">
+    <div id="puzzle" tabindex="0"></div>
+  </div>
+  <div id="preview-container">
+    <div id="preview-grid"></div>
+  </div>
+</div>
+
+<audio id="bgMusic" loop>
+  <source src="succinct-music.mp3" type="audio/mp3">
+</audio>
+
+<script>
+  const puzzle = document.getElementById('puzzle');
+  const previewGrid = document.getElementById('preview-grid');
+  const movesDisplay = document.getElementById('moves');
+  const timerDisplay = document.getElementById('timer');
+  const highscoreDisplay = document.getElementById('highscore');
+  const bgMusic = document.getElementById('bgMusic');
+  const difficultySelect = document.getElementById('difficulty');
+  const startBtn = document.getElementById('startBtn');
+
+  let tiles = [];
+  let emptyIndex = 0;
+  let moves = 0;
+  let timer = 0;
+  let interval = null;
+  let gameStarted = false;
+  let victoryAchieved = false;
+
+  const drawTiles = () => {
+    puzzle.innerHTML = '';
+    tiles.forEach((tile, i) => {
+      const div = document.createElement('div');
+      div.className = 'tile';
+      if (tile === '') {
+        div.classList.add('empty');
+        emptyIndex = i;
+      } else {
+        const x = ((tile - 1) % 4) * -100;
+        const y = Math.floor((tile - 1) / 4) * -100;
+        div.style.backgroundPosition = `${x}px ${y}px`;
+        div.addEventListener('click', () => gameStarted && move(i, true));
+      }
+      puzzle.appendChild(div);
+    });
+  };
+
+  const drawPreview = () => {
+    previewGrid.innerHTML = '';
+    for (let i = 1; i <= 16; i++) {
+      const div = document.createElement('div');
+      div.className = 'preview-tile';
+      if (i !== 1 && i <= 15) {
+        const x = ((i - 1) % 4) * -30;
+        const y = Math.floor((i - 1) / 4) * -30;
+        div.style.backgroundPosition = `${x}px ${y}px`;
+      } else if (i === 1) {
+        div.style.background = '#f9b5d1';
+      }
+      previewGrid.appendChild(div);
+    }
+  };
+
+  const getMovableTiles = () => {
+    const moves = [];
+    if (emptyIndex % 4 !== 0) moves.push(emptyIndex - 1);
+    if (emptyIndex % 4 !== 3) moves.push(emptyIndex + 1);
+    if (emptyIndex >= 4) moves.push(emptyIndex - 4);
+    if (emptyIndex < 12) moves.push(emptyIndex + 4);
+    return moves;
+  };
+
+  const move = (i, countMove) => {
+    if (getMovableTiles().includes(i)) {
+      [tiles[emptyIndex], tiles[i]] = [tiles[i], tiles[emptyIndex]];
+      emptyIndex = i;
+      drawTiles();
+      if (countMove) {
+        moves++;
+        movesDisplay.textContent = moves;
+      }
+      checkVictory();
+    }
+  };
+
+  const shuffle = () => {
+    const diff = difficultySelect.value;
+    let shuffleCount = diff === 'easy' ? 30 : diff === 'normal' ? 60 : 100;
+    for (let i = 0; i < shuffleCount; i++) {
+      const neighbors = getMovableTiles();
+      const moveTile = neighbors[Math.floor(Math.random() * neighbors.length)];
+      move(moveTile, false);
+    }
+  };
+
+  const toggleGame = () => {
+    if (!gameStarted && !victoryAchieved) {
+      startGame();
+      startBtn.textContent = 'Pause Game';
+      startBtn.classList.remove('pulse');
+    } else {
+      pauseGame();
+      startBtn.textContent = 'Start Game';
+    }
+  };
+
+  const startGame = () => {
+    gameStarted = true;
+    victoryAchieved = false;
+    clearInterval(interval);
+    tiles = [''];
+    for (let i = 1; i <= 15; i++) tiles.push(i);
+    shuffle();
+    drawTiles();
+    moves = 0;
+    movesDisplay.textContent = moves;
+    timer = 0;
+    timerDisplay.textContent = timer;
+    interval = setInterval(() => {
+      timer++;
+      timerDisplay.textContent = timer;
+    }, 1000);
+  };
+
+  const pauseGame = () => {
+    gameStarted = false;
+    clearInterval(interval);
+  };
+
+  const resetGame = () => {
+    gameStarted = false;
+    victoryAchieved = false;
+    startBtn.textContent = 'Start Game';
+    startBtn.classList.add('pulse');
+    clearInterval(interval);
+    tiles = [''];
+    for (let i = 1; i <= 15; i++) tiles.push(i);
+    drawTiles();
+    drawPreview();
+    moves = 0;
+    timer = 0;
+    movesDisplay.textContent = moves;
+    timerDisplay.textContent = timer;
+    loadHighscore();
+  };
+
+  const toggleMusic = () => {
+    if (bgMusic.paused) {
+      bgMusic.play();
+    } else {
+      bgMusic.pause();
+    }
+  };
+
+  const checkVictory = () => {
+    const isCorrect = tiles.slice(1).every((val, idx) => val === idx + 1);
+    if (isCorrect && emptyIndex === 0) {
+      clearInterval(interval);
+      gameStarted = false;
+      victoryAchieved = true;
+      startBtn.textContent = 'Start Game';
+      startBtn.classList.add('pulse');
+      saveHighscore();
+    }
+  };
+
+  const saveHighscore = () => {
+    const key = 'succinct_highscore_' + difficultySelect.value;
+    const prev = localStorage.getItem(key);
+    if (!prev || timer < parseInt(prev)) {
+      localStorage.setItem(key, timer);
+    }
+    loadHighscore();
+  };
+
+  const loadHighscore = () => {
+    const key = 'succinct_highscore_' + difficultySelect.value;
+    const score = localStorage.getItem(key);
+    highscoreDisplay.textContent = score ? `${score}s` : '--';
+  };
+
+  difficultySelect.addEventListener('change', loadHighscore);
+  window.onload = () => {
+    resetGame();
+  };
+
+  document.addEventListener('keydown', (e) => {
+    if (!gameStarted) return;
+    const row = Math.floor(emptyIndex / 4);
+    const col = emptyIndex % 4;
+    let target;
+    switch (e.key) {
+      case 'ArrowUp': if (row < 3) target = emptyIndex + 4; break;
+      case 'ArrowDown': if (row > 0) target = emptyIndex - 4; break;
+      case 'ArrowLeft': if (col < 3) target = emptyIndex + 1; break;
+      case 'ArrowRight': if (col > 0) target = emptyIndex - 1; break;
+    }
+    if (target !== undefined) move(target, true);
+  });
+</script>
+
+</body>
+</html>
